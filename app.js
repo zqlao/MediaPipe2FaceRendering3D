@@ -1,7 +1,5 @@
 import { Ai_MediaPipe } from './modules/ai_mediapipe.js';
 import { WebcamCapture } from './modules/webcam.js';
-// const Ai_MediaPipe = require('./modules/ai_mediapipe.js');
-// const WebcamCapture = require('./modules/webcam.js');
 
 // --------------------------------------------------
 // Configuration
@@ -30,6 +28,7 @@ var canvas;
 var ai_detection;
 var head;
 var face_mesh;
+var face_decal;
 var unwrap_mesh;
 var webcam;
 var fps;
@@ -40,6 +39,7 @@ var dynamicTexture;
 var dynTexCtx;
 
 var frame = 0;
+var show_landmark = false;
 
 const camera_height = 1.5; // 2.5
 const stream_frame_time = 1000 / stream_fps;
@@ -656,6 +656,10 @@ const face_uvs =
     0.444943, 0.566036, 0.417671, 0.516311, 0.436946, 0.517472, 0.422123, 0.573595, 0.610193, 0.560698, 
     0.604668, 0.549756, 0.600249, 0.710288, 0.631747, 0.72333, 0.636627
 ];
+const face_lm_ind = [
+    1, 10, 152, 55, 65, 52, 46, 285, 295, 282, 276, 133, 130, 29, 28, 24, 22,
+    362, 359, 259, 258, 254, 252, 61, 291, 39, 0, 269, 181, 17, 405, 234, 447
+];
 
 
 // Create face mesh compatible with mediapipe landmarks
@@ -922,6 +926,29 @@ function toggle_capture()
     }
 }
 
+function toggle_landmark_highlight()
+{
+    // var highlight_landmark = true; // false
+    show_landmark = !show_landmark;
+    var colors = [];
+    if (show_landmark) {
+        var positions = face_mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+        var r = 0.2;
+        for (var i = 0; i < positions.length; i +=3) {
+            var highlight = face_lm_ind.includes(~~(i / 3));
+            if (highlight) {
+                colors.push(2, 0, 0, 1);
+            } else {
+                colors.push(r, r, r, 1);
+            }
+        }
+    } else {
+        for (var i = 0; i < face_positions.length; i +=3) {
+            colors.push(1, 1, 1, 1);
+        }
+    }
+    face_mesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, colors);
+}
 
 // App initialization
 async function Load()
@@ -961,10 +988,7 @@ async function Load()
     let light2 = new BABYLON.DirectionalLight("light2", new BABYLON.Vector3(0, 0.2, .9), scene);
 
 
-    let gl = new BABYLON.GlowLayer("glow", scene, {
-        mainTextureFixedSize: 512,
-        blurKernelSize: 64
-    });
+    let gl = new BABYLON.GlowLayer("glow", scene, {mainTextureFixedSize: 512, blurKernelSize: 64});
     gl.intensity = 0.5;
 
     // start ai
@@ -1011,6 +1035,20 @@ async function Load()
     });
     advancedTexture.addControl(btn_wireframe);    
 
+    var btn_highlight = BABYLON.GUI.Button.CreateSimpleButton("btn3", "Show Landmark");
+    btn_highlight.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+    btn_highlight.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+    btn_highlight.topInPixels = 192;
+    btn_highlight.leftInPixels = 8;
+    btn_highlight.width = "150px";
+    btn_highlight.height = "80px";
+    btn_highlight.color = "white";
+    btn_highlight.background = "gray";
+    btn_highlight.onPointerUpObservable.add(function() {
+        toggle_landmark_highlight();
+    });
+    advancedTexture.addControl(btn_highlight);    
+
     canvas.addEventListener('keydown', function(e)
     {
         if (e.keyCode == 32)            // space
@@ -1045,7 +1083,7 @@ function Run()
     var elapsed;
 
     console.log("before runRenderLoop");
-    engine.runRenderLoop(function()
+    engine.runRenderLoop(function() 
     {
         curTime = new Date().getTime();
         elapsed = curTime - lastTime;
@@ -1058,6 +1096,13 @@ function Run()
         if (ready && curTime - flipTime >= stream_frame_time)
         {
             // console.log(ai_detection.capture_callback);
+            // var global_pos = BABYLON.VertexData.ExtractFromMesh(face_mesh).clone().transform(face_mesh.getWorldMatrix());
+            // var global_pos_nose = new BABYLON.Vector3(global_pos.positions[3], global_pos.positions[4], global_pos.positions[5]);
+            // var size_here = new BABYLON.Vector3(0.2, 0.2, 0.2);
+            // face_decal = BABYLON.MeshBuilder.CreateDecal("decal", face_mesh, {position: global_pos_nose, size: size_here, localModel: true, cullBackFaces: true}, scene);
+            // face_mesh.update();
+            // console.log(global_pos);
+
             if (ai_detection.capture_callback)          // <- only if you don't want ai updates after capturing the face texture!
             {
                 if (ai_detection_mode > 0) ai_detection.update();
